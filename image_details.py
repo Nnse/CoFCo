@@ -1,6 +1,7 @@
 from rembg import remove
 import cv2
 import path_details as pd
+import numpy as np
 from PIL import Image
 from sklearn.cluster import KMeans
 
@@ -49,32 +50,47 @@ def get_color_pallet(input_path: str, output_path: str = None):
     # Reshape an image component
     img = img.reshape((img.shape[0] * img.shape[1], 4))
 
-    # Prepare k-means
+    # Pixel's indexes which alpha channel is under 253
+    indexes = []
+    # Index counter
+    i = 0
+    for rgba in img:
+        if int(rgba[3]) < 253:
+            indexes.append(i)
+        i += 1
+
+    # Delete indexes
+    img = np.delete(img, indexes, axis=0)
+    # Delete alpha channel
+    img = np.delete(img, 3, axis=1)
+
+    # k-means
     cluster = KMeans(n_clusters=5)
     cluster.fit(X=img)
     cluster_centers_arr = cluster.cluster_centers_.astype(int, copy=False)
 
     # Pallet image statement
     img_size = 64
-    margin = 15
-    width = img_size * 5 + margin * 2
-    height = img_size + margin * 2
+    width = img_size * 5
+    height = img_size
 
     # Generate a raw image
-    tiled_color_img = Image.new(mode='P', size=(width, height), color='#333333')
+    tiled_color_img = Image.new(mode='RGB', size=(width, height))
 
-    for i, rgba_arr in enumerate(cluster_centers_arr):
-        color_hex_str = '#{:02x}{:02x}{:02x}'.format(*rgba_arr)
-        print(color_hex_str + '\n')
-        color_img = Image.new(mode='P', size=(img_size, img_size), color=color_hex_str)
-        tiled_color_img.paste(im=color_img, box=(margin + img_size * i, margin))
+    for i, rgb_arr in enumerate(cluster_centers_arr):
+        # Generate hex of color
+        color_hex_str = '#{:02x}{:02x}{:02x}'.format(rgb_arr[2], rgb_arr[1], rgb_arr[0])
+        # Generate a color
+        color_img = Image.new(mode='RGB', size=(img_size, img_size), color=color_hex_str)
+        # Paste a color onto pallet
+        tiled_color_img.paste(im=color_img, box=(img_size * i, 0))
 
     # Generate output filename
-    new_filename = filename + '_output'
+    new_filename = filename + '_color_pallet'
     if output_path is not None:
         new_filename = output_path
 
     # Generate output path
     output = directory + new_filename + '.png'
     # Write to an image
-    cv2.imwrite(output, tiled_color_img)
+    tiled_color_img.save(output, quality=95)
